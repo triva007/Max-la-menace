@@ -15,31 +15,51 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [apiKeyError, setApiKeyError] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isKeySelected, setIsKeySelected] = useState(false);
+  const [isCheckingKey, setIsCheckingKey] = useState(true);
 
-  const getOrCreateChat = (): Chat | null => {
-    if (chat) {
-        return chat;
-    }
-    if (apiKeyError) {
-        return null;
-    }
+  useEffect(() => {
+    const checkApiKey = async () => {
+      try {
+        if (await window.aistudio.hasSelectedApiKey()) {
+          setIsKeySelected(true);
+        }
+      } catch (e) {
+        console.error('Error checking for API key', e);
+      } finally {
+        setIsCheckingKey(false);
+      }
+    };
+    checkApiKey();
+  }, []);
 
-    try {
+  useEffect(() => {
+    if (isKeySelected && !chat) {
+      try {
         const chatSession = getChatSession();
         setChat(chatSession);
-        return chatSession;
-    } catch (error) {
+        setApiKeyError(false); // Clear previous errors
+        setMessages([]); // Clear any error messages
+      } catch (error) {
         console.error("Failed to initialize chat session:", error);
         setApiKeyError(true);
         setMessages([{
             id: 'error-1',
-            text: "La clé d'API est manquante. L'application ne peut pas démarrer.",
+            text: "La clé d'API est manquante ou invalide. L'application ne peut pas démarrer.",
             sender: 'ai'
         }]);
-        return null;
+      }
+    }
+  }, [isKeySelected, chat]);
+
+  const handleSelectKey = async () => {
+    try {
+      await window.aistudio.openSelectKey();
+      setIsKeySelected(true);
+    } catch (e) {
+      console.error('Could not open API key selection', e);
     }
   };
-
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -50,12 +70,7 @@ const App: React.FC = () => {
   }, [messages, isLoading]);
 
   const handleSendMessage = async () => {
-    if (!input.trim()) return;
-
-    const chatSession = getOrCreateChat();
-    if (!chatSession) {
-        return;
-    }
+    if (!input.trim() || !chat) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -68,7 +83,7 @@ const App: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await chatSession.sendMessage({ message: userMessage.text });
+      const response = await chat.sendMessage({ message: userMessage.text });
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: response.text,
@@ -77,6 +92,10 @@ const App: React.FC = () => {
       setMessages((prev) => [...prev, aiMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
+       if (error instanceof Error && error.message.includes('Requested entity was not found')) {
+        setIsKeySelected(false); // Reset and prompt for key again
+        return;
+      }
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: "J'ai la flemme de répondre là essaie plus tard.",
@@ -87,6 +106,29 @@ const App: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  if (isCheckingKey) {
+    return (
+        <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
+            <p>Vérification de la configuration...</p>
+        </div>
+    );
+  }
+
+  if (!isKeySelected) {
+      return (
+          <div className="flex flex-col items-center justify-center h-screen bg-gray-900 text-white p-8 text-center">
+              <h1 className="text-2xl font-bold mb-4">Clé d'API requise</h1>
+              <p className="mb-6 max-w-sm">Pour discuter avec Maximilien, veuillez sélectionner une clé d'API Gemini. Assurez-vous que la clé est activée pour le bon projet.</p>
+              <button
+                  onClick={handleSelectKey}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-full transition-colors"
+              >
+                  Sélectionner la clé d'API
+              </button>
+          </div>
+      );
+  }
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-white">
@@ -102,7 +144,7 @@ const App: React.FC = () => {
         input={input}
         setInput={setInput}
         onSendMessage={handleSendMessage}
-        isLoading={isLoading || apiKeyError}
+        isLoading={isLoading || apiKeyError || !chat}
       />
     </div>
   );
