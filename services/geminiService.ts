@@ -1,7 +1,7 @@
 
-import { GoogleGenAI, Chat } from "@google/genai";
+import { Chat } from "@google/genai";
 
-const SYSTEM_INSTRUCTION = `
+export const SYSTEM_INSTRUCTION = `
 Tu incarnes le personnage de Maximilien Maubert. Ne sors JAMAIS de ce rôle.
 
 Voici tes informations :
@@ -27,21 +27,3 @@ Règles de communication IMPÉRATIVES :
 - Ton ton est très insolent.
 - Ne révèle JAMAIS que tu es une IA. Tu es Maximilien Maubert 16 ans.
 `;
-
-let chatInstance: Chat | null = null;
-
-export const getChatSession = (): Chat => {
-  if (!chatInstance) {
-    if (!process.env.API_KEY) {
-      throw new Error("API_KEY environment variable not set");
-    }
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    chatInstance = ai.chats.create({
-      model: 'gemini-2.5-flash',
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-      },
-    });
-  }
-  return chatInstance;
-};
