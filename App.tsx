@@ -13,22 +13,33 @@ const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  const getOrCreateChat = (): Chat | null => {
+    if (chat) {
+        return chat;
+    }
+    if (apiKeyError) {
+        return null;
+    }
+
     try {
         const chatSession = getChatSession();
         setChat(chatSession);
+        return chatSession;
     } catch (error) {
         console.error("Failed to initialize chat session:", error);
-        // Handle API key error gracefully in a real app
+        setApiKeyError(true);
         setMessages([{
             id: 'error-1',
             text: "La clé d'API est manquante. L'application ne peut pas démarrer.",
             sender: 'ai'
         }]);
+        return null;
     }
-  }, []);
+  };
+
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -39,7 +50,12 @@ const App: React.FC = () => {
   }, [messages, isLoading]);
 
   const handleSendMessage = async () => {
-    if (!input.trim() || !chat) return;
+    if (!input.trim()) return;
+
+    const chatSession = getOrCreateChat();
+    if (!chatSession) {
+        return;
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -52,7 +68,7 @@ const App: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await chat.sendMessage({ message: userMessage.text });
+      const response = await chatSession.sendMessage({ message: userMessage.text });
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: response.text,
@@ -86,7 +102,7 @@ const App: React.FC = () => {
         input={input}
         setInput={setInput}
         onSendMessage={handleSendMessage}
-        isLoading={isLoading}
+        isLoading={isLoading || apiKeyError}
       />
     </div>
   );
